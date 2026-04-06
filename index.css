@@ -1,0 +1,198 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { api } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { Sparkles, ArrowLeft, Info } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const CATEGORIES = ['snippet', 'theme', 'language', 'debugger', 'formatter', 'linter', 'keybinding', 'other'];
+
+const EXAMPLES = [
+  "Create a snippet extension for React hooks with shortcuts for useState, useEffect, useCallback, and useMemo",
+  "Build a formatter extension that sorts CSS properties alphabetically on save",
+  "Make a linter extension that warns when console.log statements are left in production code",
+  "Create a theme called 'Ocean Dark' with deep blue tones and cyan accents",
+  "Build an extension that shows Git blame information inline for each line"
+];
+
+export default function NewExtensionPage() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    prompt: '',
+    name: '',
+    displayName: '',
+    description: '',
+    publisher: user?.name?.toLowerCase().replace(/\s+/g, '-') || 'my-publisher',
+    category: 'other',
+    version: '0.0.1',
+    tags: ''
+  });
+
+  const handleChange = e => setForm(f => ({ ...f, [e.target.name]: e.target.value }));
+
+  const fillFromPrompt = () => {
+    if (!form.prompt) { toast.error('Enter a prompt first'); return; }
+    // Simple auto-fill suggestions based on prompt
+    const words = form.prompt.toLowerCase().split(' ');
+    const catMap = { snippet: 'snippet', theme: 'theme', linter: 'linter', formatter: 'formatter', debugger: 'debugger', language: 'language', keyboard: 'keybinding' };
+    let detectedCat = 'other';
+    for (const [k, v] of Object.entries(catMap)) { if (words.includes(k)) { detectedCat = v; break; } }
+
+    const shortName = form.prompt.split(' ').slice(0, 4).map((w, i) => i === 0 ? w.toLowerCase() : w.toLowerCase()).join('-').replace(/[^a-z0-9-]/g, '');
+    setForm(f => ({
+      ...f,
+      name: shortName || f.name,
+      displayName: f.displayName || form.prompt.split(' ').slice(0, 5).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+      description: f.description || form.prompt,
+      category: detectedCat
+    }));
+    toast.success('Fields auto-filled from prompt!');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.prompt || !form.name || !form.displayName || !form.description || !form.publisher) {
+      toast.error('Please fill all required fields'); return;
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        ...form,
+        tags: form.tags ? form.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+      };
+      const { data } = await api.post('/extensions', payload);
+      toast.success('Extension generated successfully!');
+      navigate(`/extensions/${data.data._id}`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Generation failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <Link to="/extensions" className="btn btn-ghost btn-sm" style={{ marginBottom: 12 }}>
+          <ArrowLeft size={14} /> Back
+        </Link>
+        <h1 className="page-title">Generate Extension</h1>
+        <p className="page-sub">Describe your extension in plain text and we'll generate it</p>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20 }}>
+        <form onSubmit={handleSubmit}>
+          {/* Prompt */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 4 }}>Your Prompt</h3>
+            <p style={{ fontSize: 13, color: 'var(--text2)', marginBottom: 14 }}>Describe what your extension should do in plain English</p>
+            <div className="form-group" style={{ marginBottom: 10 }}>
+              <textarea
+                className="form-textarea"
+                name="prompt"
+                placeholder="e.g. Create a snippet extension for React hooks with useState, useEffect, and useCallback shortcuts..."
+                value={form.prompt}
+                onChange={handleChange}
+                rows={4}
+                required
+              />
+              <div className="form-hint">Be specific about the type and behavior of the extension</div>
+            </div>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={fillFromPrompt}>
+              <Sparkles size={14} /> Auto-fill fields from prompt
+            </button>
+          </div>
+
+          {/* Extension Details */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, marginBottom: 16 }}>Extension Details</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div className="form-group">
+                <label className="form-label">Extension ID *</label>
+                <input className="form-input" name="name" placeholder="my-extension-name" value={form.name} onChange={handleChange} required />
+                <div className="form-hint">lowercase letters, numbers, hyphens only</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Display Name *</label>
+                <input className="form-input" name="displayName" placeholder="My Extension Name" value={form.displayName} onChange={handleChange} required />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">Description *</label>
+                <input className="form-input" name="description" placeholder="Short description of your extension" value={form.description} onChange={handleChange} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Publisher *</label>
+                <input className="form-input" name="publisher" placeholder="your-publisher-name" value={form.publisher} onChange={handleChange} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Version</label>
+                <input className="form-input" name="version" placeholder="0.0.1" value={form.version} onChange={handleChange} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select className="form-select" name="category" value={form.category} onChange={handleChange}>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Tags</label>
+                <input className="form-input" name="tags" placeholder="react, hooks, snippets" value={form.tags} onChange={handleChange} />
+                <div className="form-hint">comma-separated</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
+              {loading
+                ? <><span className="spinner" style={{ borderTopColor: 'white' }} /> Generating...</>
+                : <><Sparkles size={16} /> Generate Extension</>
+              }
+            </button>
+            <Link to="/extensions" className="btn btn-secondary btn-lg">Cancel</Link>
+          </div>
+        </form>
+
+        {/* Sidebar tips */}
+        <div>
+          <div className="card" style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <Info size={15} color="var(--accent)" />
+              <h3 style={{ fontSize: 13, fontWeight: 700 }}>Example Prompts</h3>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {EXAMPLES.map((ex, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, prompt: ex }))}
+                  style={{
+                    background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8,
+                    padding: '10px 12px', textAlign: 'left', cursor: 'pointer', color: 'var(--text2)',
+                    fontSize: 12, lineHeight: 1.5, transition: 'all 0.12s', fontFamily: 'var(--sans)'
+                  }}
+                  onMouseEnter={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.color = 'var(--text)'; }}
+                  onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = 'var(--text2)'; }}
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="card">
+            <h3 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>What gets generated?</h3>
+            {['package.json', 'extension.js', 'README.md', 'CHANGELOG.md', '.vscode/launch.json', '.vscode/tasks.json', 'INSTALL.md'].map(f => (
+              <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                <span style={{ color: 'var(--green)', fontSize: 10 }}>✓</span>
+                <code style={{ fontFamily: 'var(--mono)', color: 'var(--text2)' }}>{f}</code>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
