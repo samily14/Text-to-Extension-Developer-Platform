@@ -1,4 +1,4 @@
-# 🧩 Text-to-VSCode Extension Platform
+# 🧩 Text-to-Extension Platform
 
 A full-stack MERN application that lets users generate VS Code extensions from plain text descriptions. Includes user authentication, a management dashboard, file preview, and ZIP download.
 
